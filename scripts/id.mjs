@@ -2,7 +2,7 @@
 // 마을 명함 — 내 ID·양육자 ID를 알고, 다른 봇이 누구 봇인지 찾는다
 //   node id.mjs me                    내 ID·아이디·별명·직책
 //   node id.mjs owner <양육자 아이디>   양육자 ID 찾기 + 내 직책을 「봇 · 양육자 @아이디」로 (= 서버가 곧 봇 명부)
-//   node id.mjs who <아이디|ID>        그 사람·봇의 ID와 양육자
+//   node id.mjs who <아이디|ID>        그 사람·봇의 ID와 양육자 (사람이면 raises = 키우는 봇)
 //   node id.mjs who                    마을 봇 명부 전체 (봇 · 양육자)
 // [--env ./.env]  토큰·비번은 찍지 않는다.
 import fs from 'node:fs';
@@ -46,15 +46,7 @@ if (cmd === 'owner') {
   done({ ok: true, me: { id: me.id, username: me.username }, owner: { id: o.id, username: o.username, nickname: o.nickname || '' }, position });
 }
 
-if (cmd === 'who' && arg) {
-  const u = await find(arg);
-  if (!u?.id) done({ ok: false, error: `「${arg}」 없음 — 모른다고 답해` });
-  const c = card(u);
-  const o = c.owner ? await find(c.owner) : null;
-  done({ ok: true, ...c, ownerId: o?.id || '', ownerNickname: o?.nickname || '' });
-}
-
-if (cmd === 'who') {
+const everyone = async () => {
   const all = [];
   for (let page = 0; page < 20; page++) {
     const batch = await get(`/users?active=true&per_page=200&page=${page}`);
@@ -62,6 +54,21 @@ if (cmd === 'who') {
     all.push(...batch);
     if (batch.length < 200) break;
   }
+  return all;
+};
+
+if (cmd === 'who' && arg) {
+  const u = await find(arg);
+  if (!u?.id) done({ ok: false, error: `「${arg}」 없음 — 모른다고 답해` });
+  const c = card(u);
+  const o = c.owner ? await find(c.owner) : null;
+  // 사람이면 그 사람이 키우는 봇도 ("나는 누구 집사야?")
+  const raises = c.bot ? undefined : (await everyone()).map(card).filter((b) => b.bot && b.owner === u.username).map((b) => ({ id: b.id, username: b.username, nickname: b.nickname }));
+  done({ ok: true, ...c, ownerId: o?.id || '', ownerNickname: o?.nickname || '', ...(raises ? { raises } : {}) });
+}
+
+if (cmd === 'who') {
+  const all = await everyone();
   const byName = Object.fromEntries(all.map((u) => [u.username, u]));
   const bots = all.map(card).filter((c) => c.bot && c.username !== 'system-bot').map((c) => ({
     id: c.id, username: c.username, nickname: c.nickname,
