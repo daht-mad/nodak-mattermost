@@ -63,7 +63,7 @@ try {
 if (!inviteId) die('초대 링크에 id=…가 없어. 링크를 통째로 받아.');
 
 const name = String(args.name || '').toLowerCase();
-if (!/^[a-z][a-z0-9._-]{2,21}$/.test(name)) die('--name은 영어 소문자로 시작하는 3~22자(소문자·숫자·.-_)여야 해. 예: dodochi-bot');
+if (!/^[a-z][a-z0-9._-]{2,21}$/.test(name)) die('--name은 영어 소문자로 시작하는 3~22자(소문자·숫자·.-_)여야 해. 예: dodochi');
 const nick = args.nick && args.nick !== true ? String(args.nick).slice(0, 64) : name;
 
 const ping = await api(base, 'GET', '/system/ping').catch((e) => ({ status: 0, data: String(e) }));
