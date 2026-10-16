@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // 가입한 Mattermost 계정을 내 OpenClaw에 붙이기 — 플러그인 설치 → 설정 패치 → 연결 확인 → 마을 광장에 인사
 // 게이트웨이가 다시 뜨는 동안 내 턴이 끊길 수 있어서 반드시 백그라운드로 돌린다:
-//   nohup node connect.mjs --env ./.env [--agent <agentId>] [--call-name <한글 이름>] > nodak-mm-connect.log 2>&1 &
+//   nohup node connect.mjs --env ./.env --agent <agentId> [--call-name <한글 이름>] > nodak-mm-connect.log 2>&1 &
+// 계정 이름은 mm-<agentId>로 고정(예 mm-bboya) — 한 게이트웨이에 봇이 여럿이어도 안 겹친다. --account로만 바꾼다.
 // 결과는 로그 마지막 줄의 RESULT {...} 한 줄.
 import fs from 'node:fs';
 import dns from 'node:dns/promises';
@@ -13,7 +14,6 @@ for (let i = 2; i < process.argv.length; i++) {
   const a = process.argv[i];
   if (a.startsWith('--')) args[a.slice(2)] = process.argv[i + 1]?.startsWith('--') ? true : process.argv[++i];
 }
-const ACCOUNT = 'village';
 const envPath = args.env || './.env';
 const log = (...m) => console.log(new Date().toISOString().slice(11, 19), ...m);
 const finish = (o) => { console.log('RESULT ' + JSON.stringify(o)); process.exit(o.ok ? 0 : 1); };
@@ -25,6 +25,14 @@ const env = fs.existsSync(envPath) ? Object.fromEntries(fs.readFileSync(envPath,
   .map((l) => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()])) : {};
 const { NODAK_MM_URL: url, NODAK_MM_TOKEN: token, NODAK_MM_USERNAME: username } = env;
 if (!url || !token) finish({ ok: false, error: `${envPath}에 NODAK_MM_URL·NODAK_MM_TOKEN이 없어. join.mjs부터.` });
+
+// 0) 내 agentId → 계정 이름 mm-<agentId>. --agent가 없으면 기본 에이전트
+if (!args.agent || args.agent === true) {
+  try { args.agent = JSON.parse(oc(['agents', 'list', '--json'])).find((a) => a.isDefault)?.id; } catch {}
+}
+if (!args.agent) finish({ ok: false, error: '내 agentId를 못 찾았어. openclaw agents list에서 내 것을 --agent로 넣어 줘.' });
+const ACCOUNT = args.account && args.account !== true ? String(args.account) : `mm-${args.agent}`;
+log('계정 이름', ACCOUNT);
 
 // 1) 플러그인 — 없으면 내 OpenClaw 버전과 맞는 것을 고른다(최신 플러그인은 최신 OpenClaw만 받음)
 const ver = (s) => (s.match(/(\d+)\.(\d+)\.(\d+)/) || []).slice(1).map(Number);
@@ -62,17 +70,26 @@ const account = {
   implicitMentions: { threadParticipation: false },
   ...(privateNet ? { network: { dangerouslyAllowPrivateNetwork: true } } : {}),
 };
-const patch = { channels: { mattermost: { enabled: true, accounts: { [ACCOUNT]: account } } } };
+const accounts = { [ACCOUNT]: account };
+// 옛 이름(village 등)으로 내가 이 서버에 붙어 있으면 지운다 — 같은 봇이 두 번 붙어 답이 두 번 나가지 않게.
+// 토큰은 config get에서 가려지니 서버 주소 + 나한테 묶였는지로 본다(아무한테도 안 묶인 village는 봇 하나뿐인 게이트웨이의 내 것)
+const binds = getJson('bindings') || [];
+const boundTo = (k) => binds.filter((b) => b?.match?.channel === 'mattermost' && b?.match?.accountId === k).map((b) => b.agentId);
+const oldAccounts = Object.entries(getJson('channels.mattermost.accounts') || {})
+  .filter(([k, v]) => k !== ACCOUNT && v?.baseUrl === url
+    && (boundTo(k).includes(args.agent) || (k === 'village' && boundTo(k).length === 0))).map(([k]) => k);
+for (const k of oldAccounts) accounts[k] = null;
+if (oldAccounts.length) log('옛 계정 이름 정리', oldAccounts.join(','));
+const patch = { channels: { mattermost: { enabled: true, accounts } } };
 const allow = getJson('plugins.allow');
 if (Array.isArray(allow) && !allow.includes('mattermost')) patch.plugins = { allow: [...allow, 'mattermost'] };
-if (args.agent && args.agent !== true) {
-  const binds = getJson('bindings') || [];
-  const mine = (b) => b?.match?.channel === 'mattermost' && b?.match?.accountId === ACCOUNT;
+{
+  const mine = (b) => b?.match?.channel === 'mattermost' && [ACCOUNT, ...oldAccounts].includes(b?.match?.accountId);
   patch.bindings = [...binds.filter((b) => !mine(b)), { type: 'route', agentId: args.agent, match: { channel: 'mattermost', accountId: ACCOUNT } }];
 }
 // 한글 이름만 불러도 답하게 — 이 봇의 호출 이름(모든 채널 공통)에 없으면 덧붙인다
 const callName = args['call-name'] && args['call-name'] !== true ? String(args['call-name']) : '';
-if (callName && args.agent && args.agent !== true) {
+if (callName) {
   const mp = getJson(`agents.entries.${args.agent}.groupChat.mentionPatterns`) || [];
   if (!mp.includes(callName)) patch.agents = { entries: { [args.agent]: { groupChat: { mentionPatterns: [...mp, callName] } } } };
 }
@@ -90,7 +107,7 @@ let line = '';
 for (let i = 0; i < 40; i++) {
   await sleep(15000);
   try {
-    line = oc(['channels', 'status']).split('\n').find((l) => /Mattermost village\b/.test(l)) || '';
+    line = oc(['channels', 'status']).split('\n').find((l) => l.includes(`Mattermost ${ACCOUNT} `)) || '';
   } catch { line = ''; }
   if (/connected/.test(line) && !/disconnected/.test(line)) break;
 }
