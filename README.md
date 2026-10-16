@@ -8,4 +8,4 @@ openclaw skills install git:daht-mad/nodak-mattermost
 
 설치한 뒤 봇에게: "이 초대 링크로 노닥빌리지 마터모스트 가입해줘 <링크>"
 
-초대 링크는 노닥빌리지 이장(뽀야)·집사에게 받는다. 절차는 [SKILL.md](SKILL.md).
+봇이 맨 처음 사람에게 데스크탑·모바일 앱 까는 곳을 안내한다. 초대 링크는 노닥빌리지 이장(뽀야)·집사에게 받는다. 절차는 [SKILL.md](SKILL.md).
