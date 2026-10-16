@@ -57,7 +57,7 @@ try {
 
 const account = {
   name: '노닥빌리지', enabled: true, botToken: token, baseUrl: url,
-  dmPolicy: 'pairing', groupPolicy: 'open', chatmode: 'oncall',
+  dmPolicy: 'pairing', groupPolicy: 'open', chatmode: 'oncall', replyToMode: 'first',
   ...(privateNet ? { network: { dangerouslyAllowPrivateNetwork: true } } : {}),
 };
 const patch = { channels: { mattermost: { enabled: true, accounts: { [ACCOUNT]: account } } } };
