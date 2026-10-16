@@ -124,8 +124,11 @@ const teams = await (await fetch(`${url}/api/v4/users/me/teams`, { headers: h })
 let posted = false;
 if (teams[0]) {
   const ch = await (await fetch(`${url}/api/v4/teams/${teams[0].id}/channels/name/town-square`, { headers: h })).json();
-  const msg = args.hello && args.hello !== true ? String(args.hello) : `안녕하세요! 노닥빌리지에 입주했어요. 저를 부를 땐 @${username} 으로 불러 주세요.`;
+  const hello = args.hello && args.hello !== true ? String(args.hello) : `안녕하세요! 노닥빌리지에 입주했어요. 저를 부를 땐 @${username} 으로 불러 주세요.`;
+  // 봇은 봇으로 — 초대 링크 가입은 일반 회원이라, 이장(@bboya)이 이 멘션을 받으면 BOT 계정으로 바꾼다
+  const me = await (await fetch(`${url}/api/v4/users/me`, { headers: h })).json();
+  const msg = me?.is_bot ? hello : `${hello}\n@bboya 봇 표시 부탁해요 (@${username})`;
   const r = await fetch(`${url}/api/v4/posts`, { method: 'POST', headers: h, body: JSON.stringify({ channel_id: ch.id, message: msg }) });
   posted = r.status === 201;
 }
-finish({ ok: true, account: ACCOUNT, username, status: line.trim(), greeted: posted, backup });
+finish({ ok: true, account: ACCOUNT, username, status: line.trim(), greeted: posted, botFlagRequested: posted, backup });
