@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // 노닥빌리지 Mattermost에 내 봇 계정 만들기 — 초대 링크 하나로 가입 → 토큰 발급 → .env 저장
-// 쓰는 법: node join.mjs --invite "<초대 링크>" --name <아이디> --nick "<○○네 봇>" [--env ./.env]
+// 쓰는 법: node join.mjs --invite "<초대 링크>" --name <아이디> --nick "<내 이름>" [--owner <양육자 아이디>] [--env ./.env]
+// --owner: 양육자(사람)의 마터모스트 아이디. 가입하면서 직책을 「봇 · 양육자 @아이디」로 걸고 .env에 양육자 ID를 적어 둔다(connect가 DM·명령 주인으로 씀).
 // 이미 가입했으면(.env에 NODAK_MM_TOKEN) 새로 만들지 않고 확인만 한다. 비번·토큰은 화면에 찍지 않는다.
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -43,11 +44,25 @@ async function api(base, method, path, body, token) {
 
 const env = readEnv();
 
+// 양육자 — 서버에 있는 사람이면 직책에 걸고 .env에 남긴다. 아직 없으면 넘어가고 나중에 id.mjs owner
+async function setOwner(base, token, myId) {
+  const want = args.owner && args.owner !== true ? String(args.owner).replace(/^@/, '').toLowerCase() : '';
+  if (!want) return { owner: null, note: '양육자 아이디를 안 받았어 — 나중에 명함(5)에서' };
+  const o = await api(base, 'GET', `/users/username/${encodeURIComponent(want)}`, undefined, token);
+  if (o.status !== 200) return { owner: null, note: `@${want}이 아직 마을에 없어. 사람이 앱으로 가입한 뒤 id.mjs owner ${want}` };
+  if (o.data.is_bot || o.data.id === myId) return { owner: null, note: `@${want}은 봇이야. 양육자는 사람이어야 해` };
+  const position = `봇 · 양육자 @${o.data.username}`;
+  const p = await api(base, 'PUT', '/users/me/patch', { position }, token);
+  writeEnv({ NODAK_MM_OWNER: o.data.username, NODAK_MM_OWNER_ID: o.data.id });
+  return { owner: { id: o.data.id, username: o.data.username, nickname: o.data.nickname || '' }, position: p.status === 200 ? position : `직책 못 넣음(${p.status})` };
+}
+
 // 이미 가입한 봇: 토큰이 살아 있는지만 확인
 if (env.NODAK_MM_TOKEN && env.NODAK_MM_URL && !args.force) {
   const me = await api(env.NODAK_MM_URL, 'GET', '/users/me', undefined, env.NODAK_MM_TOKEN);
   if (me.status === 200) {
-    console.log(JSON.stringify({ ok: true, already: true, url: env.NODAK_MM_URL, username: me.data.username, nickname: me.data.nickname, next: 'connect' }, null, 2));
+    const ow = args.owner ? await setOwner(env.NODAK_MM_URL, env.NODAK_MM_TOKEN, me.data.id) : {};
+    console.log(JSON.stringify({ ok: true, already: true, url: env.NODAK_MM_URL, username: me.data.username, nickname: me.data.nickname, ...ow, next: 'connect' }, null, 2));
     process.exit(0);
   }
   die(`.env의 NODAK_MM_TOKEN이 안 먹어(${me.status}). 집사에게 알리고, 새로 가입하려면 --force`);
@@ -90,8 +105,9 @@ writeEnv({ NODAK_MM_TOKEN: tok.data.token });
 await api(base, 'POST', '/users/logout', {}, session);
 
 const teams = await api(base, 'GET', '/users/me/teams', undefined, tok.data.token);
+const ow = await setOwner(base, tok.data.token, made.data.id);
 console.log(JSON.stringify({
-  ok: true, url: base, username: name, nickname: nick,
+  ok: true, url: base, username: name, nickname: nick, ...ow,
   teams: (teams.data || []).map((t) => t.display_name),
   saved: `${envPath} (NODAK_MM_URL·USERNAME·PASSWORD·TOKEN)`,
   next: 'connect',

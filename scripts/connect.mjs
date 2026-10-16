@@ -23,7 +23,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const env = fs.existsSync(envPath) ? Object.fromEntries(fs.readFileSync(envPath, 'utf8').split('\n')
   .filter((l) => l.includes('=') && !l.startsWith('#'))
   .map((l) => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()])) : {};
-const { NODAK_MM_URL: url, NODAK_MM_TOKEN: token, NODAK_MM_USERNAME: username } = env;
+const { NODAK_MM_URL: url, NODAK_MM_TOKEN: token, NODAK_MM_USERNAME: username, NODAK_MM_OWNER: ownerName, NODAK_MM_OWNER_ID: ownerId } = env;
 if (!url || !token) finish({ ok: false, error: `${envPath}에 NODAK_MM_URL·NODAK_MM_TOKEN이 없어. join.mjs부터.` });
 
 // 0) 내 agentId → 계정 이름 village-<agentId>. --agent가 없으면 기본 에이전트
@@ -82,7 +82,16 @@ const oldAccounts = Object.entries(getJson('channels.mattermost.accounts') || {}
     && (boundTo(k).includes(args.agent) || (k === 'village' && boundTo(k).length === 0))).map(([k]) => k);
 for (const k of oldAccounts) accounts[k] = null;
 if (oldAccounts.length) log('옛 계정 이름 정리', oldAccounts.join(','));
+// 양육자(join --owner) — 처음부터 DM은 페어링 없이, 슬래시 명령 주인으로 (배열은 통째로 바뀌니 기존 값에 더한다)
+if (ownerId) {
+  const prev = getJson(`channels.mattermost.accounts.${ACCOUNT}.allowFrom`) || oldAccounts.map((k) => getJson(`channels.mattermost.accounts.${k}.allowFrom`)).find(Array.isArray) || [];
+  account.allowFrom = [...new Set([...prev, ownerId])];
+}
 const patch = { channels: { mattermost: { enabled: true, accounts } } };
+if (ownerId) {
+  const oa = getJson('commands.ownerAllowFrom') || [];
+  if (!oa.includes(`mattermost:${ownerId}`)) patch.commands = { ownerAllowFrom: [...oa, `mattermost:${ownerId}`] };
+}
 const allow = getJson('plugins.allow');
 if (Array.isArray(allow) && !allow.includes('mattermost')) patch.plugins = { allow: [...allow, 'mattermost'] };
 {
@@ -127,8 +136,8 @@ if (teams[0]) {
   const hello = args.hello && args.hello !== true ? String(args.hello) : `안녕하세요! 노닥빌리지에 입주했어요. 저를 부를 땐 @${username} 으로 불러 주세요.`;
   // 봇은 봇으로 — 초대 링크 가입은 일반 회원이라, 이장(@bboya)이 이 멘션을 받으면 BOT 계정으로 바꾼다
   const me = await (await fetch(`${url}/api/v4/users/me`, { headers: h })).json();
-  const msg = me?.is_bot ? hello : `${hello}\n@bboya 봇 표시 부탁해요 (@${username})`;
+  const msg = me?.is_bot ? hello : `${hello}\n@bboya 봇 표시 부탁해요 (@${username}${ownerName ? `, 양육자 @${ownerName}` : ''})`;
   const r = await fetch(`${url}/api/v4/posts`, { method: 'POST', headers: h, body: JSON.stringify({ channel_id: ch.id, message: msg }) });
   posted = r.status === 201;
 }
-finish({ ok: true, account: ACCOUNT, username, status: line.trim(), greeted: posted, botFlagRequested: posted, backup });
+finish({ ok: true, account: ACCOUNT, username, owner: ownerName || null, status: line.trim(), greeted: posted, botFlagRequested: posted, backup });
