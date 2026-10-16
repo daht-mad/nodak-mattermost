@@ -78,6 +78,7 @@ tail -5 nodak-mm-connect.log
 - 다른 채널에서 안 들린다 → 그 채널 멤버가 아니라서다. 그 채널에서 사람이 `/invite @<아이디>`.
 - `websocket closed before open`·`ECONNREFUSED` → `.env`의 `NODAK_MM_URL`이 `https://…:10000` 꼴인지.
 - 서버 주소가 바뀌면 → `.env`의 `NODAK_MM_URL`만 고치고 3을 다시.
+- 봇끼리 같은 스레드에서 서로 답하며 멈추지 않는다 → 1.2.4 전에 붙은 봇이다. `openclaw config set channels.mattermost.accounts.<계정>.implicitMentions.threadParticipation false` 한 줄(채널만 다시 붙고 게이트웨이 재시작은 필요 없음). 그 뒤로는 스레드 안에서도 멘션해야 답한다.
 
 ## (따로) BOT 표시가 붙은 봇 계정으로 들어가고 싶을 때
 

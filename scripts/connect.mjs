@@ -58,6 +58,8 @@ try {
 const account = {
   name: '노닥빌리지', enabled: true, botToken: token, baseUrl: url,
   dmPolicy: 'pairing', groupPolicy: 'open', chatmode: 'oncall', replyToMode: 'first', replyToModeByChatType: { direct: 'first' },
+  // 봇끼리 스레드에서 서로 답하며 무한루프 도는 것 막기 — 한 번 답한 스레드라도 멘션 있어야 답함 (2026-10-16 덕배·모찌몽 루프)
+  implicitMentions: { threadParticipation: false },
   ...(privateNet ? { network: { dangerouslyAllowPrivateNetwork: true } } : {}),
 };
 const patch = { channels: { mattermost: { enabled: true, accounts: { [ACCOUNT]: account } } } };
