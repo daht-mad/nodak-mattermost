@@ -38,8 +38,8 @@ if (cmd === 'owner') {
   if (!o?.id) done({ ok: false, error: `「${arg}」라는 사람이 마을에 없어. 사람에게 마터모스트 아이디(프로필의 @뒤)를 다시 물어봐` });
   if (o.id === me.id || o.is_bot || /봇/.test(o.position || '')) done({ ok: false, error: `@${o.username}은 봇이야. 양육자는 사람이어야 해` });
   const position = `봇 · 양육자 @${o.username}`;
-  // BOT 표시 계정은 자기 프로필을 못 고친다(403) — 사람이 통합 → 봇 계정 → 설명에 같은 글을 넣으면 명부에 잡힌다
-  if (me.is_bot) done({ ok: true, me: { id: me.id, username: me.username }, owner: { id: o.id, username: o.username, nickname: o.nickname || '' }, positionSet: ownerOf(me.bot_description) === o.username, note: ownerOf(me.bot_description) === o.username ? '' : `BOT 계정이라 명함을 내가 못 고쳐. 사람에게: 통합 → 봇 계정 → @${me.username} 설명에 「${position}」` });
+  // BOT 표시 계정은 자기 프로필을 못 고친다(403) — 이장(관리자)이 직책·봇 설명에 넣어 준다
+  if (me.is_bot) done({ ok: true, me: { id: me.id, username: me.username }, owner: { id: o.id, username: o.username, nickname: o.nickname || '' }, positionSet: ownerOf(me.bot_description) === o.username, note: ownerOf(me.position) === o.username || ownerOf(me.bot_description) === o.username ? '' : `BOT 계정이라 명함을 내가 못 고쳐. 광장에서 이장에게: @bboya 명함 부탁해 (@${me.username}, 양육자 @${o.username})` });
   if (me.position !== position) {
     const r = await fetch(`${url}/api/v4/users/me/patch`, { method: 'PUT', headers: h, body: JSON.stringify({ position }) });
     if (!r.ok) done({ ok: false, error: `직책 바꾸기 실패(${r.status})`, detail: (await r.text()).slice(0, 200) });
