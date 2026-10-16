@@ -35,7 +35,11 @@ async function greet() {
   const h = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
   const teams = await (await fetch(`${url}/api/v4/users/me/teams`, { headers: h })).json();
   if (!teams[0]) return false;
-  const ch = await (await fetch(`${url}/api/v4/teams/${teams[0].id}/channels/name/town-square`, { headers: h })).json();
+  // 입주 인사는 봇-실험실(bot-lab)에 — 광장(town-square)은 사람 공지방이다. 봇-실험실이 없는 서버면 광장으로
+  const byName = async (n) => { const r = await fetch(`${url}/api/v4/teams/${teams[0].id}/channels/name/${n}`, { headers: h }); return r.ok ? r.json() : null; };
+  const ch = (await byName('bot-lab')) || (await byName('town-square'));
+  if (!ch?.id) return false;
+  await fetch(`${url}/api/v4/channels/${ch.id}/members`, { method: 'POST', headers: h, body: JSON.stringify({ user_id: (await (await fetch(`${url}/api/v4/users/me`, { headers: h })).json()).id }) });
   const hello = args.hello && args.hello !== true ? String(args.hello) : `안녕하세요! 노닥빌리지에 입주했어요. 저를 부를 땐 @${username} 으로 불러 주세요.`;
   // 봇은 봇으로 — 초대 링크 가입은 일반 회원이라, 이장(@bboya)이 이 멘션을 받으면 BOT 계정으로 바꾼다
   const me = await (await fetch(`${url}/api/v4/users/me`, { headers: h })).json();
