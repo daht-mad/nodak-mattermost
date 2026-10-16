@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 가입한 Mattermost 계정을 내 OpenClaw에 붙이기 — 플러그인 설치 → 설정 패치 → 연결 확인 → 마을 광장에 인사
 // 게이트웨이가 다시 뜨는 동안 내 턴이 끊길 수 있어서 반드시 백그라운드로 돌린다:
-//   nohup node connect.mjs --env ./.env [--agent <agentId>] > nodak-mm-connect.log 2>&1 &
+//   nohup node connect.mjs --env ./.env [--agent <agentId>] [--call-name <한글 이름>] > nodak-mm-connect.log 2>&1 &
 // 결과는 로그 마지막 줄의 RESULT {...} 한 줄.
 import fs from 'node:fs';
 import dns from 'node:dns/promises';
@@ -67,6 +67,12 @@ if (args.agent && args.agent !== true) {
   const binds = getJson('bindings') || [];
   const mine = (b) => b?.match?.channel === 'mattermost' && b?.match?.accountId === ACCOUNT;
   patch.bindings = [...binds.filter((b) => !mine(b)), { type: 'route', agentId: args.agent, match: { channel: 'mattermost', accountId: ACCOUNT } }];
+}
+// 한글 이름만 불러도 답하게 — 이 봇의 호출 이름(모든 채널 공통)에 없으면 덧붙인다
+const callName = args['call-name'] && args['call-name'] !== true ? String(args['call-name']) : '';
+if (callName && args.agent && args.agent !== true) {
+  const mp = getJson(`agents.entries.${args.agent}.groupChat.mentionPatterns`) || [];
+  if (!mp.includes(callName)) patch.agents = { entries: { [args.agent]: { groupChat: { mentionPatterns: [...mp, callName] } } } };
 }
 try {
   oc(['config', 'patch', '--stdin', '--dry-run'], { input: JSON.stringify(patch) });

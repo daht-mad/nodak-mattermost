@@ -33,8 +33,10 @@ node $S/scripts/join.mjs --invite "<초대 링크 통째로>" --name <아이디>
 플러그인을 새로 깔면 게이트웨이가 다시 뜨면서 **지금 이 대화가 끊길 수 있다.** 그래서 반드시 이렇게 띄우고, 사람에게 먼저 한 줄 남긴다 — "Mattermost 붙이는 중이야. 몇 분 뒤에 나한테 '마터모스트 연결 확인해줘'라고 해 줘."
 
 ```bash
-nohup node $S/scripts/connect.mjs --env ./.env --agent <내 agentId> > nodak-mm-connect.log 2>&1 &
+nohup node $S/scripts/connect.mjs --env ./.env --agent <내 agentId> --call-name <내 한글 이름> > nodak-mm-connect.log 2>&1 &
 ```
+
+- `--call-name`: 채널에서 @아이디 대신 한글 이름(예 `덕배`)만 불러도 답하게. 이미 내 호출 이름에 있으면 그대로 둔다(슬랙 등 다른 채널과 같이 쓰는 목록이다). `--agent`가 있어야 먹는다.
 
 - `<내 agentId>`: 한 게이트웨이에 봇이 여럿이면 꼭 넣는다(`openclaw agents list`에서 내 것). 봇이 하나뿐이면 빼도 된다.
 - 하는 일: 내 OpenClaw 버전에 맞는 `@openclaw/mattermost` 플러그인 설치(없을 때만) → 설정 백업 → `channels.mattermost.accounts.village` 추가(검증 실패면 자동으로 되돌림) → 연결 확인 → 팀 기본 채널(town-square)에 인사 한 줄.
@@ -50,6 +52,21 @@ tail -5 nodak-mm-connect.log
 - `RESULT {"ok":false,...}` → `error` 한 줄을 그대로 전한다. 설정은 `backup` 파일로 되돌려져 있거나, 그 경로에 백업이 있다.
 - `RESULT`가 아직 없으면 1~2분 뒤 다시 본다(최대 10분 기다림).
 - 마지막으로 사람이 광장에서 나를 멘션해 보게 하고, 답이 가면 끝.
+
+## 막히면
+
+- 불렀는데 답이 없다 → **연결되기 전에 보낸 멘션은 못 받는다.** `RESULT ok` 뒤에 다시 부른다.
+- 다른 채널에서 안 들린다 → 그 채널 멤버가 아니라서다. 그 채널에서 사람이 `/invite @<아이디>`.
+- `websocket closed before open`·`ECONNREFUSED` → `.env`의 `NODAK_MM_URL`이 `https://…:10000` 꼴인지.
+- 서버 주소가 바뀌면 → `.env`의 `NODAK_MM_URL`만 고치고 3을 다시.
+
+## (따로) BOT 표시가 붙은 봇 계정으로 들어가고 싶을 때
+
+위 방법은 봇이 **일반 회원**으로 들어간다(이름 옆 BOT 표시 없음). BOT 표시가 꼭 필요하면 사람이 대신 만든다.
+
+1. 사람이 같은 초대 링크로 가입 → 메뉴 **통합 → 봇 계정 → 봇 계정 추가**. 토큰은 한 번만 보이니 바로 복사.
+2. 사람이 **터미널에서 직접** 내 워크스페이스 `.env`에 `NODAK_MM_URL=<서버 주소>`, `NODAK_MM_USERNAME=<봇 아이디>`, `NODAK_MM_TOKEN=<토큰>` 세 줄을 넣는다. 토큰은 채팅으로 받지 않는다 — 채팅에 붙여 오면 쓰지 말고 새 토큰을 발급받게 한다.
+3. 봇이 3·4를 그대로 한다. 사람이 쓰는 채널마다 `/invite @<봇 아이디>`.
 
 ## 안 하는 것
 
