@@ -5,6 +5,8 @@
 // 계정 이름은 village-<agentId>로 고정(예 village-bboya) — 한 게이트웨이에 봇이 여럿이어도 안 겹친다. --account로만 바꾼다.
 // 결과는 로그 마지막 줄의 RESULT {...} 한 줄.
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import { execFileSync } from 'node:child_process';
@@ -17,7 +19,9 @@ for (let i = 2; i < process.argv.length; i++) {
 const envPath = args.env || './.env';
 const log = (...m) => console.log(new Date().toISOString().slice(11, 19), ...m);
 const finish = (o) => { console.log('RESULT ' + JSON.stringify(o)); process.exit(o.ok ? 0 : 1); };
-const oc = (argv, opts = {}) => execFileSync('openclaw', argv, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 300000, ...opts });
+// 윈도우에선 openclaw·npm이 .cmd 파일이라 셸을 거쳐야 실행된다
+const WIN = process.platform === 'win32';
+const oc = (argv, opts = {}) => execFileSync('openclaw', argv, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 300000, shell: WIN, ...opts });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const env = fs.existsSync(envPath) ? Object.fromEntries(fs.readFileSync(envPath, 'utf8').split('\n')
@@ -25,6 +29,42 @@ const env = fs.existsSync(envPath) ? Object.fromEntries(fs.readFileSync(envPath,
   .map((l) => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()])) : {};
 const { NODAK_MM_URL: url, NODAK_MM_TOKEN: token, NODAK_MM_USERNAME: username, NODAK_MM_OWNER: ownerName, NODAK_MM_OWNER_ID: ownerId } = env;
 if (!url || !token) finish({ ok: false, error: `${envPath}에 NODAK_MM_URL·NODAK_MM_TOKEN이 없어. join.mjs부터.` });
+
+// 마을 광장에 인사 — 사람들이 나를 어떻게 부르는지 알게
+async function greet() {
+  const h = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+  const teams = await (await fetch(`${url}/api/v4/users/me/teams`, { headers: h })).json();
+  if (!teams[0]) return false;
+  const ch = await (await fetch(`${url}/api/v4/teams/${teams[0].id}/channels/name/town-square`, { headers: h })).json();
+  const hello = args.hello && args.hello !== true ? String(args.hello) : `안녕하세요! 노닥빌리지에 입주했어요. 저를 부를 땐 @${username} 으로 불러 주세요.`;
+  // 봇은 봇으로 — 초대 링크 가입은 일반 회원이라, 이장(@bboya)이 이 멘션을 받으면 BOT 계정으로 바꾼다
+  const me = await (await fetch(`${url}/api/v4/users/me`, { headers: h })).json();
+  const msg = me?.is_bot ? hello : `${hello}\n@bboya 봇 표시 부탁해요 (@${username}${ownerName ? `, 양육자 @${ownerName}` : ''})`;
+  const r = await fetch(`${url}/api/v4/posts`, { method: 'POST', headers: h, body: JSON.stringify({ channel_id: ch.id, message: msg }) });
+  return r.status === 201;
+}
+
+// 헤르메스로 사는 봇 — 오픈클로 대신 ~/.hermes/.env에 마터모스트 줄을 넣고 끝(게이트웨이 재시작은 봇이 따로)
+if (args.hermes) {
+  const hpath = args.hermes !== true ? String(args.hermes) : path.join(os.homedir(), '.hermes', '.env');
+  if (!fs.existsSync(path.dirname(hpath))) finish({ ok: false, error: `${path.dirname(hpath)}가 없어. 헤르메스가 깔린 곳이 맞는지 확인` });
+  const backup = fs.existsSync(hpath) ? `${hpath}.bak-nodak-mm-${Date.now()}` : null;
+  if (backup) fs.copyFileSync(hpath, backup);
+  let text = fs.existsSync(hpath) ? fs.readFileSync(hpath, 'utf8') : '';
+  const put = (k, v) => { const re = new RegExp(`^${k}=.*$`, 'm'); const line = `${k}=${v}`; text = re.test(text) ? text.replace(re, line) : (text && !text.endsWith('\n') ? text + '\n' : text) + line + '\n'; };
+  put('MATTERMOST_URL', url);
+  put('MATTERMOST_TOKEN', token);
+  put('MATTERMOST_REPLY_MODE', 'thread');          // 답은 스레드로
+  put('MATTERMOST_REQUIRE_MENTION', 'true');       // @멘션으로만 깬다
+  if (ownerId) {                                   // DM·명령은 양육자만 (기존 값에 더한다)
+    const prev = (text.match(/^MATTERMOST_ALLOWED_USERS=(.*)$/m) || [])[1] || '';
+    put('MATTERMOST_ALLOWED_USERS', [...new Set([...prev.split(',').map((x) => x.trim()).filter(Boolean), ownerId])].join(','));
+  }
+  fs.writeFileSync(hpath, text, { mode: 0o600 });
+  log('헤르메스 설정 넣음', hpath);
+  const posted = await greet();
+  finish({ ok: true, runtime: 'hermes', env: hpath, username, owner: ownerName || null, greeted: posted, botFlagRequested: posted, backup, next: 'hermes gateway restart' });
+}
 
 // 0) 내 agentId → 계정 이름 village-<agentId>. --agent가 없으면 기본 에이전트
 if (!args.agent || args.agent === true) {
@@ -41,7 +81,7 @@ const host = ver(oc(['--version']));
 let installed = false;
 try { installed = /mattermost/i.test(oc(['plugins', 'list'])); } catch {}
 if (!installed) {
-  const all = JSON.parse(execFileSync('npm', ['view', '@openclaw/mattermost', 'versions', '--json'], { encoding: 'utf8' }));
+  const all = JSON.parse(execFileSync('npm', ['view', '@openclaw/mattermost', 'versions', '--json'], { encoding: 'utf8', shell: WIN }));
   const pick = all.filter((v) => !v.includes('-') && le(ver(v), host)).sort((a, b) => (le(ver(a), ver(b)) ? -1 : 1)).pop();
   if (!pick) finish({ ok: false, error: `내 OpenClaw(${host.join('.')})에 맞는 Mattermost 플러그인이 없어. OpenClaw를 올려야 해.` });
   log(`플러그인 설치 @openclaw/mattermost@${pick}`);
@@ -122,17 +162,5 @@ if (!/connected/.test(line) || /disconnected/.test(line)) {
   finish({ ok: false, error: '설정은 넣었는데 연결이 안 보여. openclaw channels status·openclaw logs로 확인', status: line.trim(), backup });
 }
 
-// 4) 마을 광장에 인사 — 사람들이 나를 어떻게 부르는지 알게
-const h = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
-const teams = await (await fetch(`${url}/api/v4/users/me/teams`, { headers: h })).json();
-let posted = false;
-if (teams[0]) {
-  const ch = await (await fetch(`${url}/api/v4/teams/${teams[0].id}/channels/name/town-square`, { headers: h })).json();
-  const hello = args.hello && args.hello !== true ? String(args.hello) : `안녕하세요! 노닥빌리지에 입주했어요. 저를 부를 땐 @${username} 으로 불러 주세요.`;
-  // 봇은 봇으로 — 초대 링크 가입은 일반 회원이라, 이장(@bboya)이 이 멘션을 받으면 BOT 계정으로 바꾼다
-  const me = await (await fetch(`${url}/api/v4/users/me`, { headers: h })).json();
-  const msg = me?.is_bot ? hello : `${hello}\n@bboya 봇 표시 부탁해요 (@${username}${ownerName ? `, 양육자 @${ownerName}` : ''})`;
-  const r = await fetch(`${url}/api/v4/posts`, { method: 'POST', headers: h, body: JSON.stringify({ channel_id: ch.id, message: msg }) });
-  posted = r.status === 201;
-}
+const posted = await greet();
 finish({ ok: true, account: ACCOUNT, username, owner: ownerName || null, status: line.trim(), greeted: posted, botFlagRequested: posted, backup });
