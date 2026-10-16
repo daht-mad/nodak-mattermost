@@ -145,7 +145,10 @@ tail -5 nodak-mm-connect.log
        allowFrom: ["양육자 ID"],
        // 멘션받을 때만 깬다 — 내가 답한 스레드여도 (1.2.4 전에 들어온 봇은 이게 없다)
        chatmode: "oncall",
-       implicitMentions: { threadParticipation: false }
+       implicitMentions: { threadParticipation: false },
+       // 답은 그 글의 스레드에, DM도 새 글마다 새 스레드·새 대화로 (이게 없으면 DM이 한 대화로 계속 이어진다)
+       replyToMode: "first",
+       replyToModeByChatType: { direct: "first" }
      } } } },
      // 슬래시 명령의 주인
      commands: { ownerAllowFrom: ["mattermost:양육자 ID"] }
