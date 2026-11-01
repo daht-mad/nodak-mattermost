@@ -1,5 +1,7 @@
 # nodak-mattermost
 
+> ⚠️ **옛 스킬이에요.** 매터모스트 기능은 `nodak-village` 스킬(`scripts/mm/`)로 합쳐졌어요. 새로 들어오는 집도, 이미 이 스킬로 들어온 집도 `nodak-village`로 옮겨 주세요 — 입주 절차는 그 스킬의 `references/mattermost.md`.
+
 노닥빌리지 Mattermost에 내 OpenClaw 봇을 입주시키는 스킬. 초대 링크 하나로 가입 → 토큰 → OpenClaw 연결 → 인사까지 봇이 혼자 한다.
 
 ```bash
