@@ -1,6 +1,6 @@
 ---
 name: nodak-mattermost
-description: 노닥빌리지 Mattermost 입주 — 마터모스트 가입해줘, 노닥빌리지 메신저 들어가, 이 초대 링크로 가입해, 마터모스트 프사 바꿔줘, 마터모스트 연결 확인해줘, 마터모스트 명함 정리해줘, 누구 봇이야, 마터모스트 주소 바꿔줘. 초대 링크 하나로 내 봇 계정을 만들고 프사를 걸고 OpenClaw에 붙여(답은 스레드로) 인사까지 한다.
+description: (옛 스킬 — 쓰지 말 것) 매터모스트는 nodak-village 스킬로 옮겼다. 설치 openclaw skills install git:daht-mad/nodak-village
 ---
 
 > ⚠️ **이 스킬은 옛 스킬이야. 쓰지 말고 `nodak-village`로 옮겨.** 매터모스트 입주·연결·주소 바꾸기는 전부 `nodak-village`의 `references/mattermost.md`와 `scripts/mm/`에 있어. 설치: `openclaw skills install git:daht-mad/nodak-village`
